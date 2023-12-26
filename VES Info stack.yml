@@ -1,0 +1,151 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Reusable template of creating VPC, EC2, S3, and Security group.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "VPC CIDR"
+        Parameters:
+          - VPCCIDR
+      - Label:
+          default: "Subnet CIDR"
+        Parameters:
+          - SubnetCIDR
+
+Parameters:
+  VPCCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: Please enter the VPC CIDR
+
+  SubnetCIDR:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: Please enter the CIDR for Subnet
+
+Resources:
+  myVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 
+        Ref: VPCCIDR
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: myVPC
+
+  MyInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: MyInternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: myVPC
+      InternetGatewayId:
+        Ref: MyInternetGateway
+
+  myPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: myVPC
+      CidrBlock: 
+        Ref: SubnetCIDR
+      AvailabilityZone: "us-east-1a"
+      Tags:
+        - Key: Name
+          Value: myPublicSubnet
+
+  myRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  
+        Ref: myVPC
+      Tags:
+        - Key: Name
+          Value: myRouteTable
+
+  myRoute:
+    Type: AWS::EC2::Route
+    Properties:
+       RouteTableId:
+         Ref: myRouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId:
+         Ref: MyInternetGateway
+
+  mySubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: myPublicSubnet
+      RouteTableId:
+        Ref: myRouteTable
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to client host
+      VpcId: 
+        Ref: myVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0 
+
+  MyBucketName:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: vesinfo2023
+  MyBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource:
+              Sub: 'arn:aws:s3:::${MyS3Bucket}/*'
+      Bucket:
+        Ref: MyBucketName
+          
+  MyInstances:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: us-east-1a
+      ImageId: ami-079db87dc4c10ac91
+      InstanceType: t2.micro
+      SubnetId: 
+        Ref: myPublicSubnet
+
+Outputs:
+  myVPC:
+    Description: my VPC
+    Value:
+      Ref: myVPC
+    Export:
+      Name: myVPC
+  MyInstances:
+    Description: my EC2 Instance
+    Value:
+      Ref: MyInstances
+    Export:
+      Name: MyInstances
